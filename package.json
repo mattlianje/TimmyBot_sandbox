@@ -1,0 +1,17 @@
+{
+  "name": "ella-webhook",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "engines": {
+    "node": "8.9.0"
+  },
+  "author": "",
+  "dependencies": {
+    "actions-on-google": "^1.5.1",
+    "mustache": "^2.3.0",
+    "node-gyp": "^3.6.2",
+    "soap": "^0.23.0",
+    "synchronize": "^2.0.0"
+  }
+}
