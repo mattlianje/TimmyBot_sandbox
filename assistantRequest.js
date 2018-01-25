@@ -7,9 +7,7 @@ function assistantRequest(lambda_event) {
   var AuthToken = lambda_event.headers.AuthToken;
   console.log("****Security Token: " + AuthToken);
   this.body = JSON.parse(lambda_event.body);
-  if (AuthToken != 'L045i3vezQG2C6R') {
-    setBreakpoint();
-  }
+
 }
 
 assistantRequest.prototype.get = function get(field) {
