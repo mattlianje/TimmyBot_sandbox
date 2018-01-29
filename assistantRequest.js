@@ -4,8 +4,12 @@
 function assistantRequest(lambda_event) {
   console.log("lambda_event");
   //console.log(lambda_event);
+  
+  // At least for the moment no security feature is needed
+  
   var AuthToken = lambda_event.headers.AuthToken;
   console.log("****Security Token: " + AuthToken);
+
   this.body = JSON.parse(lambda_event.body);
 
 }

@@ -18,7 +18,7 @@ function returnLambdaResponse(assistantResponse, context) {
     "statusCode": assistantResponse.statusCode,
     "headers": {
       "Content-Type": "application/json",
-      "Google-Assistant-API-Version": "v2"
+      "Google-Assistant-API-Version": "v1"
     },
     "body": JSON.stringify(assistantResponse.body)
   };
@@ -37,7 +37,7 @@ function askForConfirmation(app, inputPrompt) {
 
 
 function testAction(app) {
-  app.ask("this is a test");
+  app.ask("this is a test biatch");
 }
 
 
