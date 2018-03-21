@@ -6,6 +6,8 @@
 var AssistantRequest = require('./assistantRequest');
 var AssistantResponse = require('./assistantResponse');
 
+var twilio = require('./node_modules/twilio');
+
 var Sync = require('synchronize');
 var assistantResponse = new AssistantResponse();
 
@@ -15,8 +17,6 @@ const LOCATION_PERMISSION_ACTION = 'locationPermissionAction';
 var itemName;
 var itemSize;
 var itemRequest;
-
-
 
 function returnLambdaResponse(assistantResponse, context) {
   // lambda_response is the object to return that API Gateway understands
@@ -83,7 +83,7 @@ function menuPicker(app) {
     // Add the first item to the list
     .addItems(app.buildOptionItem('COFFEE',
       ['coffee', 'double-double', 'coffees', 'beverage'])
-      .setTitle('Coffee')
+      .setTitle('Coffecvvrve')
       .setDescription('Fresh arabica triple roasted hipster shit bitches')
       .setImage('http://www.timhortons.com/nut-calc-images/CAEN/large/Original-Blend-Coffee.png', 'Coffee')
     )
@@ -102,6 +102,21 @@ function menuPicker(app) {
       .setImage('http://shoplevy.com/wp-content/uploads/2017/11/enhanced-30250-1482966036-1.jpg', 'Sandwich')
     )
   );
+}
+
+// send text test
+function sendText() {
+  console.log("sending text");
+  // var accountSid = 'AC507e725097519444c8ff9d0bcb020fb5'; // Your Account SID from www.twilio.com/console
+  // var authToken = '766bb8251647e070f37abff4960999cf';   // Your Auth Token from www.twilio.com/console
+  var client = new twilio(accountSid, authToken);
+  
+  client.messages.create({
+    body: 'ur mom gay',
+    to: '+6478888588',  // Text this number
+    from: '+6476972806' // From a valid Twilio number
+  })
+  .then((message) => console.log(message.sid));
 }
 
 
@@ -129,6 +144,7 @@ exports.handler = function(event, context, callback) {
     actionMap.set("searchAction", timHortonsSearch);
     actionMap.set("menuPicker", menuPicker);
     actionMap.set("customizeCoffee", customizeCoffee);
+    actionMap.set("sendText", sendText);
 
     // fix this to actually be able to get user selections without asking
     
@@ -153,3 +169,4 @@ exports.handler = function(event, context, callback) {
     returnLambdaResponse(assistantResponse, context);
   });
 };
+
