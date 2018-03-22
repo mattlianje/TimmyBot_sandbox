@@ -31,23 +31,26 @@ exports.handler = (event, context, callback) => {
   // process POST request
   }else{
     var data = JSON.parse(event.body);
-     
+    console.log(data);
     // Make sure this is a page subscription
     if (data.object === 'page') {
     // Iterate over each entry - there may be multiple if batched
-    data.entry.forEach(function(entry) {
-        var pageID = entry.id;
-        var timeOfEvent = entry.time;
-        // Iterate over each messaging event
-        entry.messaging.forEach(function(msg) {
-          if (msg.message) {
-            receivedMessage(msg);
-          } else {
-            console.log("Webhook received unknown event: ", event);
-          }
-        });
-    });
-    
+    if (data.entry) {
+      data.entry.forEach(function(entry) {
+          var pageID = entry.id;
+          var timeOfEvent = entry.time;
+          // Iterate over each messaging event
+          entry.messaging.forEach(function(msg) {
+            if (msg.message) {
+              receivedMessage(msg);
+            }else if (msg.postback) {
+              receivedPostback(msg);
+            } else {
+              console.log("Webhook received unknown event: ", event);
+            }
+          });
+      });
+    }
     }
     // Assume all went well.
     //
@@ -62,6 +65,31 @@ exports.handler = (event, context, callback) => {
     callback(null, response);
   }
 }
+
+function receivedPostback(event) {
+  console.log("Postback data: ", event.postback);
+
+  var senderID = event.sender.id;
+  var recipientID = event.recipient.id;
+  var timeOfMessage = event.timestamp;
+  var postback = event.postback;
+  console.log("Received message for user %d and page %d at %d with message:", senderID, recipientID, timeOfMessage);
+  console.log(JSON.stringify(message));
+  var title = postback.title;
+  var payload = postback.payload;
+
+  if (payload) {
+    switch (title) {
+      case "Add Item":
+        if (payload == "coffee") {
+          // write order to database 
+          console.log("you ordered a coffeee");
+        }
+        sendConfirmation(senderID);
+    }
+  }
+}
+
 function receivedMessage(event) {
   console.log("Message data: ", event.message);
   
@@ -72,7 +100,7 @@ function receivedMessage(event) {
   console.log("Received message for user %d and page %d at %d with message:", senderID, recipientID, timeOfMessage);
   console.log(JSON.stringify(message));
   var messageId = message.mid;
-  var messageText = message.text;
+  var messageText = message.text.toLowerCase();
   var messageAttachments = message.attachments;
   if (messageText) {
     // If we receive a text message, check to see if it matches a keyword
@@ -102,6 +130,11 @@ function receivedMessage(event) {
           sendTextMessage(friends[i], msg);
         }
         break;
+      case "show menu": 
+        console.log("sending menu: ");
+        sendMenu(senderID);
+        break;
+      
       default:
         console.log("This is his id: " + recipientID);
         sendTextMessage(senderID, messageText);
@@ -141,6 +174,81 @@ function getFriendsID(name) {
   return friends[name];
 }
 
+//send quick reply text
+function sendConfirmation(recipientID) {
+  var messageData = {
+    recipient: {
+      id: recipientID
+    },
+    message: {
+      text: "confirmation",
+      quick_replies: [
+        {
+          content_type: "text",
+          title: "Order Confirmed",
+          payload: "confirm"
+        },
+        {
+          content_type: "text",
+          title: "Add Another Item",
+          payload: "add more"
+        }
+      ]
+    }
+  };
+  callSendAPI(messageData);
+}
+
+//send menu
+function sendMenu(recipientId) {
+  var messageData = {
+    recipient: {
+      id: recipientId
+    },
+    message: {
+      attachment: {
+        type: "template",
+        payload: {
+          template_type: "list",
+          top_element_style: "compact",
+          elements: [
+            {
+              title: "Coffee",
+              subtitle: "Original Blend Coffee",
+              image_url: "http://www.timhortons.com/nut-calc-images/CAEN/large/Original-Blend-Coffee.png",
+              buttons: [
+                {
+                  title: "Add Item",
+                  type: "postback",
+                  payload: "coffee"
+                }
+              ]
+            },
+            {
+              title: "Donut",
+              subtitle: "A freshly baked chocolate glazed donut",
+              image_url: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ2BCaEfmSuVel83xeJ_dSwvtdgEptJHJp6AAtrZWidVTbfKcNTlw",
+              buttons: [
+                {
+                  title: "Add Item",
+                  type: "postback",
+                  payload: "donut"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  };
+  callSendAPI(messageData);
+}
+
+//send button
+function sendButton(recipientId) {
+
+}
+
 function sendTextMessage(recipientId, messageText) {
   console.log("sending to : " + recipientId);
   var messageData = {
@@ -155,7 +263,8 @@ function sendTextMessage(recipientId, messageText) {
 }
 function callSendAPI(messageData) {
   var body = JSON.stringify(messageData);
-  var path = '/v2.6/me/messages?access_token=' + PAGE_ACCESS_TOKEN;
+  console.log("sending :" + body);
+  var path = '/me/messages?access_token=' + PAGE_ACCESS_TOKEN;
   var options = {
     host: "graph.facebook.com",
     path: path,
