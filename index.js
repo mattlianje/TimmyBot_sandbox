@@ -45,6 +45,8 @@ exports.handler = (event, context, callback) => {
               receivedMessage(msg);
             }else if (msg.postback) {
               receivedPostback(msg);
+            } else if (msg.quick_reply) {
+              receivedQuick(msg);
             } else {
               console.log("Webhook received unknown event: ", event);
             }
@@ -66,6 +68,32 @@ exports.handler = (event, context, callback) => {
   }
 }
 
+function receivedQuick(event) {
+  console.log("Quick Reply Data: ", event.quick_reply);
+
+  var senderID = event.sender.id;
+  var recipientID = event.recipient.id;
+  var timeOfMessage = event.timestamp;
+  var quick_reply = event.quick_reply;
+  console.log("Received message for user %d and page %d at %d with message:", senderID, recipientID, timeOfMessage);
+  console.log(JSON.stringify(quick_reply));
+  var payload = quick_reply.payload;
+
+  if (payload) {
+    switch (payload) {
+      case "add more":
+        sendMenu(senderID);
+        break;
+      case "confirm":
+        // generate reciept and send host order
+        sendTextMessage(senderID, "Order Confirmed!");
+        break;
+      default:
+        sendTextMessage(senderID, "default");
+    }
+  }
+}
+
 function receivedPostback(event) {
   console.log("Postback data: ", event.postback);
 
@@ -74,7 +102,7 @@ function receivedPostback(event) {
   var timeOfMessage = event.timestamp;
   var postback = event.postback;
   console.log("Received message for user %d and page %d at %d with message:", senderID, recipientID, timeOfMessage);
-  console.log(JSON.stringify(message));
+  console.log(JSON.stringify(postback));
   var title = postback.title;
   var payload = postback.payload;
 
@@ -86,6 +114,10 @@ function receivedPostback(event) {
           console.log("you ordered a coffeee");
         }
         sendConfirmation(senderID);
+        break;
+      default:
+        console.log("defaulted");
+        sendTextMessage(senderID, "default");
     }
   }
 }
@@ -100,12 +132,12 @@ function receivedMessage(event) {
   console.log("Received message for user %d and page %d at %d with message:", senderID, recipientID, timeOfMessage);
   console.log(JSON.stringify(message));
   var messageId = message.mid;
-  var messageText = message.text.toLowerCase();
+  var messageText = message.text;
   var messageAttachments = message.attachments;
   if (messageText) {
     // If we receive a text message, check to see if it matches a keyword
     // and send back the example. Otherwise, just echo the text we received.
-    switch (messageText) {
+    switch (messageText.toLowerCase()) {
       case 'generic':
         //sendGenericMessage(senderID);
         console.log("This is his id: " + recipientID);
@@ -134,7 +166,16 @@ function receivedMessage(event) {
         console.log("sending menu: ");
         sendMenu(senderID);
         break;
-      
+      case "add another item":
+        console.log("adding another item");
+        sendMenu(senderID);
+        break;
+      case "confirm order":
+        console.log("confirming order");
+        sendTextMessage(senderID, "Order Confirmed!");
+        //should retrieve order and print out a reciept
+        break;
+
       default:
         console.log("This is his id: " + recipientID);
         sendTextMessage(senderID, messageText);
@@ -181,11 +222,11 @@ function sendConfirmation(recipientID) {
       id: recipientID
     },
     message: {
-      text: "confirmation",
+      text: "Confirm Order?",
       quick_replies: [
         {
           content_type: "text",
-          title: "Order Confirmed",
+          title: "Confirm Order",
           payload: "confirm"
         },
         {
