@@ -5,18 +5,17 @@
 
 var AssistantRequest = require('./assistantRequest');
 var AssistantResponse = require('./assistantResponse');
-
+var twilio = require('twilio');
+var AWS = require('aws-sdk');
+var http = require('http');
+var https = require('https');
+var notification = require('./notification');
+AWS.config.update({region: 'us-east-1'});
 var Sync = require('synchronize');
 var assistantResponse = new AssistantResponse();
 
 const LOCATION_PERMISSION_ACTION = 'locationPermissionAction';
-
-// Some globalized user choice variables
-var itemName;
-var itemSize;
-var itemRequest;
-
-
+// const screenAvailable = app.hasAvailableSurfaceCapabilities(app.SurfaceCapabilities.SCREEN_OUTPUT);
 
 function returnLambdaResponse(assistantResponse, context) {
   // lambda_response is the object to return that API Gateway understands
@@ -29,6 +28,80 @@ function returnLambdaResponse(assistantResponse, context) {
     "body": JSON.stringify(assistantResponse.body)
   };
   context.succeed(lambda_response);
+}
+
+
+function dbTest (app) {
+  ddb = newAWS.DynamoDB({apiVersion: '2012-10-08'});
+ 
+  var params = {
+    TableName: 'TABLE',
+    Item: {
+      'customerID' : {N: '001'},
+      'customerName' : {S: 'Matthieu Court'},
+    }
+  }
+
+  ddb.putItem(params, function(err, data) {
+    if (err) {
+      console.log("Error", err);
+    }
+    else {
+      console.log("Success", data);
+    }
+  });
+}
+
+function sendText(app) {
+  var sendSuccess = notification.sendNotification();
+
+    if(sendSuccess){
+      app.tell("message sent");
+    } else {
+      app.tell("send message function failed");
+    }
+  /*
+  var accountSid = 'ACa7278c1b5bfda0f1ba3827a1887786d7'; // Your Account SID from www.twilio.com/console
+  var authToken = '60f43dc7ab70fe5d547f928158606746';   // Your Auth Token from www.twilio.com/console
+  var client = new twilio(accountSid, authToken);
+  
+  console.log("sending text");
+  
+  client.messages.create({
+    body: 'ur mom gay',
+    to: '6477807992',  // Text this number
+    from: '2898063384' // From a valid Twilio number
+  })
+  .then((message) => console.log(message.sid));
+  app.ask("Your message might have been sent");
+*/
+}
+
+function getPermission(app) {
+  let namePermission = app.SupportedPermissions.NAME;
+  let preciseLocationPermission = app.SupportedPermissions.DEVICE_PRECISE_LOCATION;
+  app.askForPermissions("To address you by name and ask your friends nearby if they want to go on a Timmy Run", [namePermission, preciseLocationPermission]);
+}
+
+function timmyRunConfirmation(app) {
+  if (app.isPermissionGranted()) {
+    let displayName = app.getUserName().displayName;
+    let deviceCoordinates = app.getDeviceLocation().coordinates;
+    let longitude = app.getDeviceLocation().coordinates.longitude;
+    let latitude = app.getDeviceLocation().coordinates.latitude;
+    console.log("****Dude going on run name is: " + displayName);
+    app.ask("I got that your name is " + displayName + ", do you want me to send out the run invites to your nearby friends?");
+  }
+}
+
+function launchRun(app) {
+  var sendSuccess = notification.sendNotification();
+
+  if(sendSuccess){
+    app.tell("message sent");
+  } else {
+    app.tell("send message function failed");
+  }
 }
 
 function ask(app, inputPrompt) {
@@ -77,6 +150,8 @@ function customizeCoffee(app) {
 }
 
 function menuPicker(app) {
+  console.log("**** test passed");
+  
   app.askWithList("Alright! What do you want aforesaid wasteman to get you from Tim's?",
   // Build a list
   app.buildList('Timmy Menu to-go')
@@ -129,6 +204,11 @@ exports.handler = function(event, context, callback) {
     actionMap.set("searchAction", timHortonsSearch);
     actionMap.set("menuPicker", menuPicker);
     actionMap.set("customizeCoffee", customizeCoffee);
+    // actionMap.set("dbTest", dbTest);
+    actionMap.set("sendText", sendText);
+    actionMap.set("getPermission", getPermission);
+    actionMap.set("timmyRunConfirmation", timmyRunConfirmation);
+    actionMap.set("launchRun", launchRun);
 
     // fix this to actually be able to get user selections without asking
     
