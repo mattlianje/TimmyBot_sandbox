@@ -9,6 +9,7 @@
   "author": "",
   "dependencies": {
     "actions-on-google": "^1.5.1",
+    "aws-sdk": "^2.212.1",
     "https": "^1.0.0",
     "mustache": "^2.3.0",
     "node-gyp": "^3.6.2",

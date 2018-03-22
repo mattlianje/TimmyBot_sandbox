@@ -2,6 +2,11 @@
 var VERIFY_TOKEN = "timmy-test123";
 var https = require('https');
 var PAGE_ACCESS_TOKEN = "EAAC30NL4C5cBAGgHCjWafH6ZC7gZBlHBZCPo5RyEF0zQ6HE7T6agUGVjacVya7AtNilAlYOqzxckO8o9UCd9moQz7jDVWvfpDsfl8CrT2SSRgjuToN1RHpe0SJzeKiZA6RFKYLXFrXZBqvistM4eOqaDbtA2T1x93KuNnM4ywt8ZCnAsqnsfyN";
+// dynamo db setup
+var AWS = require('aws-sdk');
+AWS.config.update({region: 'us-west-2'});
+var ddb = new AWS.DynamoDB({apiVersion: '2012-10-08'});
+
 exports.handler = (event, context, callback) => {
     
   // process GET request
@@ -175,7 +180,9 @@ function receivedMessage(event) {
         sendTextMessage(senderID, "Order Confirmed!");
         //should retrieve order and print out a reciept
         break;
-
+      case "test db":
+        testDb();
+        break;
       default:
         console.log("This is his id: " + recipientID);
         sendTextMessage(senderID, messageText);
@@ -183,6 +190,29 @@ function receivedMessage(event) {
   } else if (messageAttachments) {
     sendTextMessage(senderID, "Message with attachment received");
   }
+}
+
+function testDb() {
+  console.log("testing DB");
+  var table = "dbTest1";
+  var customerID = 2008;
+    //var title = "The Big New Movie";
+    
+  var params = {
+      TableName: table,
+      Item:{
+          'customerID': { N: "2000" },
+          'Info' : { S: 'fagit' },
+      }
+  };
+
+  ddb.putItem(params, function(err, data) {
+    if (err) {
+      console.log("Error", err);
+    } else {
+      console.log("Success", data);
+    }
+  });
 }
 
 //map userID to name
