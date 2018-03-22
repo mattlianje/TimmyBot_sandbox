@@ -10,7 +10,9 @@ var AWS = require('aws-sdk');
 var http = require('http');
 var https = require('https');
 var notification = require('./notification');
+var dbSend = require('./dbSend');
 AWS.config.update({region: 'us-east-1'});
+var docClient = new AWS.DynamoDB.DocumentClient();
 var Sync = require('synchronize');
 var assistantResponse = new AssistantResponse();
 
@@ -32,24 +34,14 @@ function returnLambdaResponse(assistantResponse, context) {
 
 
 function dbTest (app) {
-  ddb = newAWS.DynamoDB({apiVersion: '2012-10-08'});
- 
-  var params = {
-    TableName: 'TABLE',
-    Item: {
-      'customerID' : {N: '001'},
-      'customerName' : {S: 'Matthieu Court'},
-    }
-  }
+  var sentToDB = dbSend.sendToDB();
 
-  ddb.putItem(params, function(err, data) {
-    if (err) {
-      console.log("Error", err);
+    if(sentToDB) {
+      app.tell("record inserted in Dynamo DB");
     }
     else {
-      console.log("Success", data);
+      app.tell("Dynamo test failed");
     }
-  });
 }
 
 function sendText(app) {
@@ -204,7 +196,7 @@ exports.handler = function(event, context, callback) {
     actionMap.set("searchAction", timHortonsSearch);
     actionMap.set("menuPicker", menuPicker);
     actionMap.set("customizeCoffee", customizeCoffee);
-    // actionMap.set("dbTest", dbTest);
+    actionMap.set("dbTest", dbTest);
     actionMap.set("sendText", sendText);
     actionMap.set("getPermission", getPermission);
     actionMap.set("timmyRunConfirmation", timmyRunConfirmation);
