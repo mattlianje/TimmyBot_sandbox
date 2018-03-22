@@ -1,172 +1,181 @@
-/* jshint node: true */
-/*jshint esversion: 6 */
-
-"use strict";
-
-var AssistantRequest = require('./assistantRequest');
-var AssistantResponse = require('./assistantResponse');
-
-var twilio = require('./node_modules/twilio');
-
-var Sync = require('synchronize');
-var assistantResponse = new AssistantResponse();
-
-const LOCATION_PERMISSION_ACTION = 'locationPermissionAction';
-
-// Some globalized user choice variables
-var itemName;
-var itemSize;
-var itemRequest;
-
-function returnLambdaResponse(assistantResponse, context) {
-  // lambda_response is the object to return that API Gateway understands
-  var lambda_response = {
-    "statusCode": assistantResponse.statusCode,
-    "headers": {
-      "Content-Type": "application/json",
-      "Google-Assistant-API-Version": "v1"      // try it with v2
-    },
-    "body": JSON.stringify(assistantResponse.body)
-  };
-  context.succeed(lambda_response);
+'use strict';
+var VERIFY_TOKEN = "timmy-test123";
+var https = require('https');
+var PAGE_ACCESS_TOKEN = "EAAC30NL4C5cBAGgHCjWafH6ZC7gZBlHBZCPo5RyEF0zQ6HE7T6agUGVjacVya7AtNilAlYOqzxckO8o9UCd9moQz7jDVWvfpDsfl8CrT2SSRgjuToN1RHpe0SJzeKiZA6RFKYLXFrXZBqvistM4eOqaDbtA2T1x93KuNnM4ywt8ZCnAsqnsfyN";
+exports.handler = (event, context, callback) => {
+    
+  // process GET request
+  if(event.queryStringParameters){
+    var queryParams = event.queryStringParameters;
+ 
+    var rVerifyToken = queryParams['hub.verify_token']
+ 
+    if (rVerifyToken === VERIFY_TOKEN) {
+      var challenge = queryParams['hub.challenge']
+      
+      var response = {
+        'body': parseInt(challenge),
+        'statusCode': 200
+      };
+      
+      callback(null, response);
+    }else{
+      var response = {
+        'body': 'Error, wrong validation token',
+        'statusCode': 422
+      };
+      
+      callback(null, response);
+    }
+  
+  // process POST request
+  }else{
+    var data = JSON.parse(event.body);
+     
+    // Make sure this is a page subscription
+    if (data.object === 'page') {
+    // Iterate over each entry - there may be multiple if batched
+    data.entry.forEach(function(entry) {
+        var pageID = entry.id;
+        var timeOfEvent = entry.time;
+        // Iterate over each messaging event
+        entry.messaging.forEach(function(msg) {
+          if (msg.message) {
+            receivedMessage(msg);
+          } else {
+            console.log("Webhook received unknown event: ", event);
+          }
+        });
+    });
+    
+    }
+    // Assume all went well.
+    //
+    // You must send back a 200, within 20 seconds, to let us know
+    // you've successfully received the callback. Otherwise, the request
+    // will time out and we will keep trying to resend.
+    var response = {
+      'body': "ok",
+      'statusCode': 200
+    };
+      
+    callback(null, response);
+  }
 }
-
-function ask(app, inputPrompt) {
-  app.data.lastPrompt = inputPrompt;
-  app.ask(inputPrompt);
-}
-
-function askForConfirmation(app, inputPrompt) {
-  app.data.lastPrompt = inputPrompt;
-  app.askForConfirmation(inputPrompt);
-}
-
-
-function testAction(app) {
-  app.ask("this is a test biatch");
-}
-
-function getTimCoordinates(app) {
-  app.ask("The nearest Timmies is at DC");
-}
-
-function locationPermissionIntent(app) {
-  let namePermission = app.SupportedPermissions.NAME;
-  let preciseLocationPermission = app.SupportedPermissions.DEVICE_PRECISE_LOCATION;
-  app.askForPermissions("To address you by name and help you find Tim Hortons' locations near you ", [namePermission, preciseLocationPermission]);
-}
-
-function timHortonsSearch(app) {
-  if (app.isPermissionGranted()) {
-    let displayName = app.getUserName().displayName;
-    let deviceCoordinates = app.getDeviceLocation().coordinates;
-    let longitude = app.getDeviceLocation().coordinates.longitude;
-    let latitude = app.getDeviceLocation().coordinates.latitude;
-
-    app.ask("You current location is " + JSON.stringify(deviceCoordinates) + latitude + longitude + "and based on this the nearest Tim Hortons is at DC");
+function receivedMessage(event) {
+  console.log("Message data: ", event.message);
+  
+  var senderID = event.sender.id;
+  var recipientID = event.recipient.id;
+  var timeOfMessage = event.timestamp;
+  var message = event.message;
+  console.log("Received message for user %d and page %d at %d with message:", senderID, recipientID, timeOfMessage);
+  console.log(JSON.stringify(message));
+  var messageId = message.mid;
+  var messageText = message.text;
+  var messageAttachments = message.attachments;
+  if (messageText) {
+    // If we receive a text message, check to see if it matches a keyword
+    // and send back the example. Otherwise, just echo the text we received.
+    switch (messageText) {
+      case 'generic':
+        //sendGenericMessage(senderID);
+        console.log("This is his id: " + recipientID);
+        sendTextMessage(senderID, "penis");
+        break;
+      case 'annoy matt':
+        sendTextMessage(1617178451732981, "mY nAmE iS MaTTHiEuU");
+        break;
+      case 'annoy kevin':
+        sendTextMessage(1671101976301343, "ur mom gay");
+        break;
+      case 'annoy tyler': 
+        sendTextMessage(1700998199983769, "hi");
+        break;
+      case "i'm going to tims":
+        var host = getName(senderID);
+        var msg = host + " is going on a tims run, would you like to anything?";
+        var friends = getFriendsID(host);
+        console.log(friends);
+        for (var i = 0; i < friends.length; i++) {
+          console.log("sending to " + getName(friends[i]));
+          sendTextMessage(friends[i], msg);
+        }
+        break;
+      default:
+        console.log("This is his id: " + recipientID);
+        sendTextMessage(senderID, messageText);
+    }
+  } else if (messageAttachments) {
+    sendTextMessage(senderID, "Message with attachment received");
   }
 }
 
-function customizeCoffee(app) {
-  app.ask(app.buildRichResponse()
-    .addSimpleResponse({speech: 'Do you want a small, medium, or large coffee',
-      displayText: 'Coffee size?'})
-    .addSuggestions(['Small', 'Medium', 'Large'])
-    //.addSuggestionLink('Suggestion Link', 'https://assistant.google.com/')
-  );
+//map userID to name
+function getName(userID) {
+  var dict = {
+    1617178451732981: "Matthieu",
+    1671101976301343: "Kevin",
+    1700998199983769: "Tyler"
+  };
+  return dict[userID];
 }
 
-function menuPicker(app) {
-  app.askWithList("Alright! What do you want aforesaid wasteman to get you from Tim's?",
-  // Build a list
-  app.buildList('Timmy Menu to-go')
-    // Add the first item to the list
-    .addItems(app.buildOptionItem('COFFEE',
-      ['coffee', 'double-double', 'coffees', 'beverage'])
-      .setTitle('Coffecvvrve')
-      .setDescription('Fresh arabica triple roasted hipster shit bitches')
-      .setImage('http://www.timhortons.com/nut-calc-images/CAEN/large/Original-Blend-Coffee.png', 'Coffee')
-    )
-    // Add the second item to the list
-    .addItems(app.buildOptionItem('DONUT',
-      ['donut', 'donuts', 'pastry'])
-      .setTitle('Donut')
-      .setDescription('Select a delicious donut fresh out the oven')
-      .setImage('http://www.timhortons.co.uk/assets/img/products/image-donut.jpg', 'Donut')
-    )
-    // Add third item to the list
-    .addItems(app.buildOptionItem('SANDWICH',
-      ['sandwich', 'sandwiches', 'fries'])
-      .setTitle('Custom Sandwich')
-      .setDescription('Build a tremendous custom sandwich')
-      .setImage('http://shoplevy.com/wp-content/uploads/2017/11/enhanced-30250-1482966036-1.jpg', 'Sandwich')
-    )
-  );
+//map name to user
+function getUserID(name) {
+  var dict = {
+    "Tyler": 1700998199983769,
+    "Matthieu": 1617178451732981,
+    "Kevin": 1671101976301343
+  };
+  return dict[name];
 }
 
-// send text test
-function sendText() {
-  console.log("sending text");
-  // var accountSid = 'AC507e725097519444c8ff9d0bcb020fb5'; // Your Account SID from www.twilio.com/console
-  // var authToken = '766bb8251647e070f37abff4960999cf';   // Your Auth Token from www.twilio.com/console
-  var client = new twilio(accountSid, authToken);
-  
-  client.messages.create({
-    body: 'ur mom gay',
-    to: '+6478888588',  // Text this number
-    from: '+6476972806' // From a valid Twilio number
-  })
-  .then((message) => console.log(message.sid));
+//map name to friend ids 
+function getFriendsID(name) {
+  var friends = {
+    "Matthieu": [getUserID("Tyler"), getUserID("Kevin")],
+    "Kevin": [getUserID("Tyler"), getUserID("Matthieu")],
+    "Tyler": [getUserID("Kevin"), getUserID("Matthieu")]
+  };
+  return friends[name];
 }
 
-
-exports.handler = function(event, context, callback) {
-  process.env.DEBUG = 'actions-on-google:*';
-  var assistantRequest = new AssistantRequest(event);
-  //var ActionsSdkAssistant = require('actions-on-google').ApiAiAssistant;
-  var ActionsSdkAssistant = require('actions-on-google').DialogflowApp;
-
-  var assistant = new ActionsSdkAssistant({
-    request: assistantRequest,
-    response: assistantResponse
-  });
-
-  const actionMap = new Map();
-
-  //const appery = new ActionsSdkApp({request, response});
-  //const testMap = new Map();
-
-    // actionMap.set("providerSearchAction", providerSearchIntent);
-    // actionMap.set(SEND_MESSAGE_ACTION, sendMessageAction);
-    actionMap.set("getTimCoordinates", getTimCoordinates);
-    actionMap.set("testAction", testAction);
-    actionMap.set("locationPermissionAction", locationPermissionIntent);
-    actionMap.set("searchAction", timHortonsSearch);
-    actionMap.set("menuPicker", menuPicker);
-    actionMap.set("customizeCoffee", customizeCoffee);
-    actionMap.set("sendText", sendText);
-
-    // fix this to actually be able to get user selections without asking
-    
-    actionMap.set(assistant.StandardIntents.OPTION, () => {
-      const param = app.getSelectedOption();
-      if (!param) {
-        app.ask('You did not select any item from the list or carousel');
-      } else if (param == 'COFFEE') {
-        app.ask('User wants a coffee');
-        console.log("user wants a coffee");
-      } else if (param == 'DONUT') {
-        app.ask('User wants a donut');
-      } else if (param == 'SANDWICH') {
-        app.ask('User wants a sandiwch');
-      } else {
-        app.ask('You selected an unknown item from the list or carousel');
-      }
+function sendTextMessage(recipientId, messageText) {
+  console.log("sending to : " + recipientId);
+  var messageData = {
+    recipient: {
+      id: recipientId
+    },
+    message: {
+      text: messageText
+    }
+  };
+  callSendAPI(messageData);
+}
+function callSendAPI(messageData) {
+  var body = JSON.stringify(messageData);
+  var path = '/v2.6/me/messages?access_token=' + PAGE_ACCESS_TOKEN;
+  var options = {
+    host: "graph.facebook.com",
+    path: path,
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'}
+  };
+  var callback = function(response) {
+    var str = ''
+    response.on('data', function (chunk) {
+      str += chunk;
     });
-
-    Sync.fiber(function() {
-    assistant.handleRequest(actionMap);
-    returnLambdaResponse(assistantResponse, context);
+    response.on('end', function () {
+ 
+    });
+  }
+  var req = https.request(options, callback);
+  req.on('error', function(e) {
+    console.log('problem with request: '+ e);
   });
-};
-
+ 
+  req.write(body);
+  req.end();
+}

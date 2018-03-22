@@ -9,8 +9,10 @@
   "author": "",
   "dependencies": {
     "actions-on-google": "^1.5.1",
+    "https": "^1.0.0",
     "mustache": "^2.3.0",
     "node-gyp": "^3.6.2",
+    "querystring": "^0.2.0",
     "request": "^2.85.0",
     "request-promise-native": "^1.0.5",
     "soap": "^0.23.0",
