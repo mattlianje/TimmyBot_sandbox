@@ -117,7 +117,12 @@ function receivedPostback(event) {
         if (payload == "coffee") {
           // write order to database 
           console.log("you ordered a coffeee");
+        } else if (payload == "donut") {
+          console.log("you ordered a donut");
+          // write order to database
         }
+        //send order summary
+        //query by senderID, the list items 
         sendConfirmation(senderID);
         break;
       default:
@@ -284,7 +289,7 @@ function sendMenu(recipientId) {
           top_element_style: "compact",
           elements: [
             {
-              title: "Coffee",
+              title: "Coffee $1.79",
               subtitle: "Original Blend Coffee",
               image_url: "http://www.timhortons.com/nut-calc-images/CAEN/large/Original-Blend-Coffee.png",
               buttons: [
@@ -296,7 +301,7 @@ function sendMenu(recipientId) {
               ]
             },
             {
-              title: "Donut",
+              title: "Donut $0.99",
               subtitle: "A freshly baked chocolate glazed donut",
               image_url: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ2BCaEfmSuVel83xeJ_dSwvtdgEptJHJp6AAtrZWidVTbfKcNTlw",
               buttons: [
