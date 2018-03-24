@@ -1,227 +1,428 @@
-/* jshint node: true */
-/*jshint esversion: 6 */
-
-"use strict";
-
-var AssistantRequest = require('./assistantRequest');
-var AssistantResponse = require('./assistantResponse');
-var twilio = require('twilio');
-var AWS = require('aws-sdk');
-var http = require('http');
+'use strict';
+var VERIFY_TOKEN = "timmy-test123";
 var https = require('https');
-var notification = require('./notification');
-var dbSend = require('./dbSend');
+var PAGE_ACCESS_TOKEN = "EAAGKSDFbpP0BAKhjoKn7EkHBZAKcZBMBdGO8IF8UXPVSjZAGTnU46NUxLzZCuKgOxAQixkX96wsv0EfS6wLHhNqJbRhXGZAgZAXAEHZAtAwtXEfKyTApHAZBFT845erZB3RjGSnf6q2MltifQXopAPc5XnxnjP91x21iH2EuwZCFZBFG3OX4TwFNUAN";
+// dynamo db setup
+var AWS = require('aws-sdk');
 AWS.config.update({region: 'us-east-1'});
+var ddb = new AWS.DynamoDB({apiVersion: '2012-10-08'});
 var docClient = new AWS.DynamoDB.DocumentClient();
-var Sync = require('synchronize');
-var assistantResponse = new AssistantResponse();
+var sessionID;
 
-const LOCATION_PERMISSION_ACTION = 'locationPermissionAction';
-// const screenAvailable = app.hasAvailableSurfaceCapabilities(app.SurfaceCapabilities.SCREEN_OUTPUT);
-
-function returnLambdaResponse(assistantResponse, context) {
-  // lambda_response is the object to return that API Gateway understands
-  var lambda_response = {
-    "statusCode": assistantResponse.statusCode,
-    "headers": {
-      "Content-Type": "application/json",
-      "Google-Assistant-API-Version": "v1"      // try it with v2
-    },
-    "body": JSON.stringify(assistantResponse.body)
-  };
-  context.succeed(lambda_response);
-}
+// TODO write a piece that sets the session ID to the previous session ID +1
+//var nextIDTest = incrementRunID();
 
 
-function dbTest (app) {
-  var sentToDB = dbSend.sendToDB();
-
-    if(sentToDB) {
-      app.tell("record inserted in Dynamo DB");
-    }
-    else {
-      app.tell("Dynamo test failed");
-    }
-}
-
-function sendText(app) {
-  var sendSuccess = notification.sendNotification();
-
-    if(sendSuccess){
-      app.tell("message sent");
-    } else {
-      app.tell("send message function failed");
-    }
-  /*
-  var accountSid = 'ACa7278c1b5bfda0f1ba3827a1887786d7'; // Your Account SID from www.twilio.com/console
-  var authToken = '60f43dc7ab70fe5d547f928158606746';   // Your Auth Token from www.twilio.com/console
-  var client = new twilio(accountSid, authToken);
-  
-  console.log("sending text");
-  
-  client.messages.create({
-    body: 'ur mom gay',
-    to: '6477807992',  // Text this number
-    from: '2898063384' // From a valid Twilio number
-  })
-  .then((message) => console.log(message.sid));
-  app.ask("Your message might have been sent");
-*/
-}
-
-function getPermission(app) {
-  let namePermission = app.SupportedPermissions.NAME;
-  let preciseLocationPermission = app.SupportedPermissions.DEVICE_PRECISE_LOCATION;
-  app.askForPermissions("To address you by name and ask your friends nearby if they want to go on a Timmy Run", [namePermission, preciseLocationPermission]);
-}
-
-function timmyRunConfirmation(app) {
-  if (app.isPermissionGranted()) {
-    let displayName = app.getUserName().displayName;
-    let deviceCoordinates = app.getDeviceLocation().coordinates;
-    let longitude = app.getDeviceLocation().coordinates.longitude;
-    let latitude = app.getDeviceLocation().coordinates.latitude;
-    console.log("****Dude going on run name is: " + displayName);
-    app.ask("I got that your name is " + displayName + ", do you want me to send out the run invites to your nearby friends?");
-  }
-}
-
-function launchRun(app) {
-  var sendSuccess = notification.sendNotification();
-
-  if(sendSuccess){
-    app.tell("message sent");
-  } else {
-    app.tell("send message function failed");
-  }
-}
-
-function ask(app, inputPrompt) {
-  app.data.lastPrompt = inputPrompt;
-  app.ask(inputPrompt);
-}
-
-function askForConfirmation(app, inputPrompt) {
-  app.data.lastPrompt = inputPrompt;
-  app.askForConfirmation(inputPrompt);
-}
-
-
-function testAction(app) {
-  app.ask("this is a test biatch");
-}
-
-function getTimCoordinates(app) {
-  app.ask("The nearest Timmies is at DC");
-}
-
-function locationPermissionIntent(app) {
-  let namePermission = app.SupportedPermissions.NAME;
-  let preciseLocationPermission = app.SupportedPermissions.DEVICE_PRECISE_LOCATION;
-  app.askForPermissions("To address you by name and help you find Tim Hortons' locations near you ", [namePermission, preciseLocationPermission]);
-}
-
-function timHortonsSearch(app) {
-  if (app.isPermissionGranted()) {
-    let displayName = app.getUserName().displayName;
-    let deviceCoordinates = app.getDeviceLocation().coordinates;
-    let longitude = app.getDeviceLocation().coordinates.longitude;
-    let latitude = app.getDeviceLocation().coordinates.latitude;
-
-    app.ask("You current location is " + JSON.stringify(deviceCoordinates) + latitude + longitude + "and based on this the nearest Tim Hortons is at DC");
-  }
-}
-
-function customizeCoffee(app) {
-  app.ask(app.buildRichResponse()
-    .addSimpleResponse({speech: 'Do you want a small, medium, or large coffee',
-      displayText: 'Coffee size?'})
-    .addSuggestions(['Small', 'Medium', 'Large'])
-    //.addSuggestionLink('Suggestion Link', 'https://assistant.google.com/')
-  );
-}
-
-function menuPicker(app) {
-  console.log("**** test passed");
-  
-  app.askWithList("Alright! What do you want aforesaid wasteman to get you from Tim's?",
-  // Build a list
-  app.buildList('Timmy Menu to-go')
-    // Add the first item to the list
-    .addItems(app.buildOptionItem('COFFEE',
-      ['coffee', 'double-double', 'coffees', 'beverage'])
-      .setTitle('Coffee')
-      .setDescription('Fresh arabica triple roasted hipster shit bitches')
-      .setImage('http://www.timhortons.com/nut-calc-images/CAEN/large/Original-Blend-Coffee.png', 'Coffee')
-    )
-    // Add the second item to the list
-    .addItems(app.buildOptionItem('DONUT',
-      ['donut', 'donuts', 'pastry'])
-      .setTitle('Donut')
-      .setDescription('Select a delicious donut fresh out the oven')
-      .setImage('http://www.timhortons.co.uk/assets/img/products/image-donut.jpg', 'Donut')
-    )
-    // Add third item to the list
-    .addItems(app.buildOptionItem('SANDWICH',
-      ['sandwich', 'sandwiches', 'fries'])
-      .setTitle('Custom Sandwich')
-      .setDescription('Build a tremendous custom sandwich')
-      .setImage('http://shoplevy.com/wp-content/uploads/2017/11/enhanced-30250-1482966036-1.jpg', 'Sandwich')
-    )
-  );
-}
-
-
-exports.handler = function(event, context, callback) {
-  process.env.DEBUG = 'actions-on-google:*';
-  var assistantRequest = new AssistantRequest(event);
-  //var ActionsSdkAssistant = require('actions-on-google').ApiAiAssistant;
-  var ActionsSdkAssistant = require('actions-on-google').DialogflowApp;
-
-  var assistant = new ActionsSdkAssistant({
-    request: assistantRequest,
-    response: assistantResponse
-  });
-
-  const actionMap = new Map();
-
-  //const appery = new ActionsSdkApp({request, response});
-  //const testMap = new Map();
-
-    // actionMap.set("providerSearchAction", providerSearchIntent);
-    // actionMap.set(SEND_MESSAGE_ACTION, sendMessageAction);
-    actionMap.set("getTimCoordinates", getTimCoordinates);
-    actionMap.set("testAction", testAction);
-    actionMap.set("locationPermissionAction", locationPermissionIntent);
-    actionMap.set("searchAction", timHortonsSearch);
-    actionMap.set("menuPicker", menuPicker);
-    actionMap.set("customizeCoffee", customizeCoffee);
-    actionMap.set("dbTest", dbTest);
-    actionMap.set("sendText", sendText);
-    actionMap.set("getPermission", getPermission);
-    actionMap.set("timmyRunConfirmation", timmyRunConfirmation);
-    actionMap.set("launchRun", launchRun);
-
-    // fix this to actually be able to get user selections without asking
+exports.handler = (event, context, callback) => {
     
-    actionMap.set(assistant.StandardIntents.OPTION, () => {
-      const param = app.getSelectedOption();
-      if (!param) {
-        app.ask('You did not select any item from the list or carousel');
-      } else if (param == 'COFFEE') {
-        app.ask('User wants a coffee');
-        console.log("user wants a coffee");
-      } else if (param == 'DONUT') {
-        app.ask('User wants a donut');
-      } else if (param == 'SANDWICH') {
-        app.ask('User wants a sandiwch');
-      } else {
-        app.ask('You selected an unknown item from the list or carousel');
-      }
-    });
+  // process GET request
+  if(event.queryStringParameters){
+    var queryParams = event.queryStringParameters;
+ 
+    var rVerifyToken = queryParams['hub.verify_token']
+ 
+    if (rVerifyToken === VERIFY_TOKEN) {
+      var challenge = queryParams['hub.challenge']
+      
+      var response = {
+        'body': parseInt(challenge),
+        'statusCode': 200
+      };
+      
+      callback(null, response);
+    }else{
+      var response = {
+        'body': 'Error, wrong validation token',
+        'statusCode': 422
+      };
+      
+      callback(null, response);
+    }
+  
+  // process POST request
+  }else{
+    var data = JSON.parse(event.body);
+    console.log(data);
+    // Make sure this is a page subscription
+    if (data.object === 'page') {
+    // Iterate over each entry - there may be multiple if batched
+    if (data.entry) {
+      data.entry.forEach(function(entry) {
+          var pageID = entry.id;
+          var timeOfEvent = entry.time;
+          // Iterate over each messaging event
+          entry.messaging.forEach(function(msg) {
+            if (msg.message) {
+              receivedMessage(msg);
+            }else if (msg.postback) {
+              receivedPostback(msg);
+            } else if (msg.quick_reply) {
+              receivedQuick(msg);
+            } else {
+              console.log("Webhook received unknown event: ", event);
+            }
+          });
+      });
+    }
+    }
+    // Assume all went well.
+    //
+    // You must send back a 200, within 20 seconds, to let us know
+    // you've successfully received the callback. Otherwise, the request
+    // will time out and we will keep trying to resend.
+    var response = {
+      'body': "ok",
+      'statusCode': 200
+    };
+      
+    callback(null, response);
+  }
+}
 
-    Sync.fiber(function() {
-    assistant.handleRequest(actionMap);
-    returnLambdaResponse(assistantResponse, context);
+function receivedQuick(event) {
+  console.log("Quick Reply Data: ", event.quick_reply);
+
+  var senderID = event.sender.id;
+  var recipientID = event.recipient.id;
+  var timeOfMessage = event.timestamp;
+  var quick_reply = event.quick_reply;
+  console.log("Received message for user %d and page %d at %d with message:", senderID, recipientID, timeOfMessage);
+  console.log(JSON.stringify(quick_reply));
+  var payload = quick_reply.payload;
+
+  if (payload) {
+    switch (payload) {
+      case "add more":
+        sendMenu(senderID);
+        break;
+      case "confirm":
+        // generate reciept and send host order
+        sendTextMessage(senderID, "Order Confirmed!");
+        break;
+      default:
+        sendTextMessage(senderID, "default");
+    }
+  }
+}
+
+function receivedPostback(event) {
+  console.log("Postback data: ", event.postback);
+
+  var senderID = event.sender.id;
+  var recipientID = event.recipient.id;
+  var timeOfMessage = event.timestamp;
+  var postback = event.postback;
+  console.log("Received message for user %d and page %d at %d with message:", senderID, recipientID, timeOfMessage);
+  console.log(JSON.stringify(postback));
+  var title = postback.title;
+  var payload = postback.payload;
+
+  if (payload) {
+    switch (title) {
+      case "Add Item":
+        if (payload == "coffee") {
+          // write order to database 
+          console.log("you ordered a coffeee");
+        } else if (payload == "donut") {
+          console.log("you ordered a donut");
+          // write order to database
+        }
+        //send order summary
+        //query by senderID, the list items 
+        sendConfirmation(senderID);
+        break;
+      default:
+        console.log("defaulted");
+        sendTextMessage(senderID, "default");
+    }
+  }
+}
+
+function receivedMessage(event) {
+  console.log("Message data: ", event.message);
+  
+  var senderID = event.sender.id;
+  var recipientID = event.recipient.id;
+  var timeOfMessage = event.timestamp;
+  var message = event.message;
+  console.log("Received message for user %d and page %d at %d with message:", senderID, recipientID, timeOfMessage);
+  console.log(JSON.stringify(message));
+  var messageId = message.mid;
+  var messageText = message.text;
+  var messageAttachments = message.attachments;
+  if (messageText) {
+    // If we receive a text message, check to see if it matches a keyword
+    // and send back the example. Otherwise, just echo the text we received.
+    switch (messageText.toLowerCase()) {
+      case 'generic':
+        //sendGenericMessage(senderID);
+        console.log("This is his id: " + recipientID);
+        sendTextMessage(senderID, "penis");
+        break;
+      case 'annoy matt':
+        sendTextMessage(1617178451732981, "mY nAmE iS MaTTHiEuU");
+        break;
+      case 'annoy kevin':
+        sendTextMessage(1671101976301343, "ur mom gay");
+        break;
+      case 'annoy tyler': 
+        sendTextMessage(1700998199983769, "hi");
+        break;
+      case 'annoy eldrick':
+        sendTextMessage(1685604204796223, "prepare to face the blickyAHHH");
+        break;
+      case "i'm going to tims":
+        var host = getName(senderID);
+        var msg = host + " is going on a tims run, would you like to anything?";
+        var friends = getFriendsID(host);
+        console.log(friends);
+        for (var i = 0; i < friends.length; i++) {
+          console.log("sending to " + getName(friends[i]));
+          sendTextMessage(friends[i], msg);
+        }
+        break;
+      case "show menu": 
+        console.log("sending menu: ");
+        sendMenu(senderID);
+        break;
+      case "add another item":
+        console.log("adding another item");
+        sendMenu(senderID);
+        break;
+      case "confirm order":
+        console.log("confirming order");
+        sendTextMessage(senderID, "Order Confirmed!");
+        //should retrieve order and print out a reciept
+        break;
+      case "test db":
+        testDb();
+        break;
+      case "test increment":
+        incrementRunID();
+        break;
+      default:
+        console.log("This is his id: " + recipientID);
+        sendTextMessage(senderID, messageText);
+    }
+  } else if (messageAttachments) {
+    sendTextMessage(senderID, "Message with attachment received");
+  }
+}
+
+function testDb() {
+  console.log("testing DB");
+  var table = "dbTest1";
+  var customerID = 2000;
+    //var title = "The Big New Movie";
+    
+  var params = {
+      TableName: table,
+      Item:{
+          'customerID': { N: "2022" },
+          'Info' : { S: 'fagit' },
+      }
+  };
+
+  ddb.putItem(params, function(err, data) {
+    if (err) {
+      console.log("Error", err);
+    } else {
+      console.log("Success", data);
+    }
   });
-};
+}
+
+// function the grabs the id of the last run & calls onScan which sets the globalized session ID var
+ function incrementRunID() {
+   console.log("Querying the table for the greatest run");
+   // we make a quick array to store all the customer ID s from the past
+   var arrayPastID;
+   var params = {
+     TableName: "dbTest1",
+     ProjectionExpression: "customerID",
+   };
+   docClient.scan(params, onScan);
+ }
+
+function onScan(err, data) {
+  var scanResults;
+  var previousID;
+
+     if (err) {
+      console.error("Unable to scan the table. Error JSON:", JSON.stringify(err, null, 2));
+     }
+     else {
+       // print all the customer IDs
+       console.log("Scan succeeded");
+       console.log("First item is " + data.Items[0].customerID);
+        data.Items.forEach(function(record) {
+          if (record.customerID != null) {
+            //scanResults.push(record.customerID);
+            console.log("record: " + record.customerID);
+            console.log(typeof record.customerID );
+          }
+     });
+     }
+     previousID = data.Items[0].customerID;
+     sessionID = previousID + 1;
+     console.log("****Your current session ID is " + sessionID);
+}
+
+//map userID to name
+function getName(userID) {
+  var dict = {
+    1617178451732981: "Matthieu",
+    1671101976301343: "Kevin",
+    1700998199983769: "Tyler",
+    1685604204796223: "Eldrick"
+  };
+  return dict[userID];
+}
+
+//map name to user
+function getUserID(name) {
+  var dict = {
+    "Tyler": 1700998199983769,
+    "Matthieu": 1617178451732981,
+    "Kevin": 1671101976301343,
+    "Eldrick": 1685604204796223
+  };
+  return dict[name];
+}
+
+//map name to friend ids 
+function getFriendsID(name) {
+  var friends = {
+    "Matthieu": [getUserID("Tyler"), getUserID("Kevin")],
+    "Kevin": [getUserID("Tyler"), getUserID("Matthieu")],
+    "Tyler": [getUserID("Kevin"), getUserID("Matthieu")]
+  };
+  return friends[name];
+}
+
+//send quick reply text
+function sendConfirmation(recipientID) {
+  var messageData = {
+    recipient: {
+      id: recipientID
+    },
+    message: {
+      text: "Confirm Order?",
+      quick_replies: [
+        {
+          content_type: "text",
+          title: "Confirm Order",
+          payload: "confirm"
+        },
+        {
+          content_type: "text",
+          title: "Add Another Item",
+          payload: "add more"
+        }
+      ]
+    }
+  };
+  callSendAPI(messageData);
+}
+
+//send menu
+function sendMenu(recipientId) {
+  var messageData = {
+    recipient: {
+      id: recipientId
+    },
+    message: {
+      attachment: {
+        type: "template",
+        payload: {
+          template_type: "list",
+          top_element_style: "compact",
+          elements: [
+            {
+              title: "Coffee $1.79",
+              subtitle: "Original Blend Coffee",
+              image_url: "http://www.timhortons.com/nut-calc-images/CAEN/large/Original-Blend-Coffee.png",
+              buttons: [
+                {
+                  title: "Add Item",
+                  type: "postback",
+                  payload: "coffee"
+                }
+              ]
+            },
+            {
+              title: "Donut $0.99",
+              subtitle: "A freshly baked chocolate glazed donut",
+              image_url: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ2BCaEfmSuVel83xeJ_dSwvtdgEptJHJp6AAtrZWidVTbfKcNTlw",
+              buttons: [
+                {
+                  title: "Add Item",
+                  type: "postback",
+                  payload: "donut"
+                }
+              ]
+            },
+            {
+              title: "Sandwich $5.99",
+              subtitle: "Fresh BLT on Italian bun",
+              image_url: "http://www.timhortons.com/ca/images/ham-cheese-thumbnail.png",
+              buttons: [
+                {
+                  title: "Add Item",
+                  type: "postback",
+                  payload: "sandwich"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  };
+  callSendAPI(messageData);
+}
+
+//send button
+function sendButton(recipientId) {
+
+}
+
+function sendTextMessage(recipientId, messageText) {
+  console.log("sending to : " + recipientId);
+  var messageData = {
+    recipient: {
+      id: recipientId
+    },
+    message: {
+      text: messageText
+    }
+  };
+  callSendAPI(messageData);
+}
+function callSendAPI(messageData) {
+  var body = JSON.stringify(messageData);
+  console.log("sending :" + body);
+  var path = '/me/messages?access_token=' + PAGE_ACCESS_TOKEN;
+  var options = {
+    host: "graph.facebook.com",
+    path: path,
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'}
+  };
+  var callback = function(response) {
+    var str = ''
+    response.on('data', function (chunk) {
+      str += chunk;
+    });
+    response.on('end', function () {
+ 
+    });
+  }
+  var req = https.request(options, callback);
+  req.on('error', function(e) {
+    console.log('problem with request: '+ e);
+  });
+ 
+  req.write(body);
+  req.end();
+}
