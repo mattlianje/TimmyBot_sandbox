@@ -49,11 +49,14 @@ exports.handler = (event, context, callback) => {
           // Iterate over each messaging event
           entry.messaging.forEach(function(msg) {
             if (msg.message) {
-              receivedMessage(msg);
-            }else if (msg.postback) {
+              if (msg.message.quick_reply) {
+                console.log("***** this is a quick reply");
+                receivedQuick(msg);
+              } else {
+                receivedMessage(msg);
+              }
+            } else if (msg.postback) {
               receivedPostback(msg);
-            } else if (msg.quick_reply) {
-              receivedQuick(msg);
             } else {
               console.log("Webhook received unknown event: ", event);
             }
@@ -81,7 +84,7 @@ function receivedQuick(event) {
   var senderID = event.sender.id;
   var recipientID = event.recipient.id;
   var timeOfMessage = event.timestamp;
-  var quick_reply = event.quick_reply;
+  var quick_reply = event.message.quick_reply;
   console.log("Received message for user %d and page %d at %d with message:", senderID, recipientID, timeOfMessage);
   console.log(JSON.stringify(quick_reply));
   var payload = quick_reply.payload;
@@ -93,7 +96,21 @@ function receivedQuick(event) {
         break;
       case "confirm":
         // generate reciept and send host order
-        sendTextMessage(senderID, "Order Confirmed!");
+        sendOrderToHost(senderID);
+        sendTextMessage(senderID, "Order Sent!");
+        break;
+      case "join run":
+        sendMenu(senderID);
+        break;
+      case "decline run":
+        sendTextMessage(senderID, "ok");
+        break;
+      case "startRun":
+        sendTextMessage(senderID, "Great! I let your friends know you are going on a run");
+        startRun(senderID);
+        break;
+      case "leavingIntent":
+        sendTextMessage(senderID, "No problem, I am always here to let your friends know if you are going to Tims :)");
         break;
       default:
         sendTextMessage(senderID, "default");
@@ -116,20 +133,25 @@ function receivedPostback(event) {
   if (payload) {
     switch (title) {
       case "Add Item":
+        var msg = "nothing added";
         if (payload == "coffee") {
-          // write order to database 
           console.log("you ordered a coffeee");
+          addItem(senderID, "coffee");
+          msg = "Coffee added to your order!";
         } else if (payload == "donut") {
           console.log("you ordered a donut");
-          // write order to database
+          addItem(senderID, "donut");
+          msg = "Donut added to your order!";
+        } else if (payload == "sandwich") {
+          console.log("you ordered a sandwich");
+          addItem(senderID, "sandwich");
+          msg = "Sandwich added to your order!";
         }
-        //send order summary
-        //query by senderID, the list items 
-        sendConfirmation(senderID);
+        //send confirm or order more?
+        sendConfirmation(senderID, msg);
         break;
-      default:
-        console.log("defaulted");
-        sendTextMessage(senderID, "default");
+    default:
+      console.log("defaulted");
     }
   }
 }
@@ -167,15 +189,8 @@ function receivedMessage(event) {
       case 'annoy eldrick':
         sendTextMessage(1685604204796223, "prepare to face the blickyAHHH");
         break;
-      case "i'm going to tims":
-        var host = getName(senderID);
-        var msg = host + " is going on a tims run, would you like to anything?";
-        var friends = getFriendsID(host);
-        console.log(friends);
-        for (var i = 0; i < friends.length; i++) {
-          console.log("sending to " + getName(friends[i]));
-          sendTextMessage(friends[i], msg);
-        }
+      case "start a run":
+        startRun(senderID);
         break;
       case "show menu": 
         console.log("sending menu: ");
@@ -185,20 +200,32 @@ function receivedMessage(event) {
         console.log("adding another item");
         sendMenu(senderID);
         break;
+
+      case "get host": 
+        console.log("gonna print out the host");
+        sendOrderToHost(senderID);  
+        break;
       case "confirm order":
         console.log("confirming order");
         sendTextMessage(senderID, "Order Confirmed!");
         //should retrieve order and print out a reciept
+        sendOrderToHost(senderID);
         break;
-      case "test db":
-        testDb();
+      case "test add":
+        addItem(senderID, "coffee");
         break;
       case "test increment":
         incrementRunID();
         break;
+      case "test receipt":
+        sendReciept(senderID, senderID, ["coffee", "donut", "sandwich"] );
+        break;
+      case "test prompt":
+        sendRunPrompt(senderID, "test");
+        break;
       default:
         console.log("This is his id: " + recipientID);
-        sendTextMessage(senderID, messageText);
+        greetingIntent(senderID);
     }
   } else if (messageAttachments) {
     sendTextMessage(senderID, "Message with attachment received");
@@ -207,9 +234,8 @@ function receivedMessage(event) {
 
 function testDb() {
   console.log("testing DB");
-  var table = "dbTest1";
+  var table = "runs";
   var customerID = 2000;
-    //var title = "The Big New Movie";
     
   var params = {
       TableName: table,
@@ -218,91 +244,192 @@ function testDb() {
           'Info' : { S: 'fagit' },
       }
   };
-
-  ddb.putItem(params, function(err, data) {
-    if (err) {
-      console.log("Error", err);
-    } else {
-      console.log("Success", data);
-    }
-  });
-
-  getThing(2022, 'fagit');
-
-  params = {
-    TableName: table,
-    Item:{
-        'customerID': { N: "2022" },
-        'Info' : { S: 'not fagit' },
-    }
-  };
-
-  ddb.putItem(params, function(err, data) {
-    if (err) {
-      console.log("Error", err);
-    } else {
-      console.log("Success", data);
-    }
-  });
-  
-  getThing(2022, 'not fagit');
+  putItem(params);
 }
 
-//test retrieval 
-function getThing(id, info) {
-  console.log("get thing");
-  var params = {
-    TableName: "dbTest1",
-    Key: {
-      'customerID': id
+// starts a run
+function startRun(senderID) {
+  var host = getName(senderID);
+  var msg = host + " is going on a Tims run. Would you like anything?";
+  var friends = getFriendsID(host);
+  console.log("initializing run");
+  initializeRun(senderID);
+  for (var i = 0; i < friends.length; i++) {
+    console.log("sending to " + getName(friends[i]));
+    sendRunPrompt(friends[i], msg);
+  }; 
+}
+
+function putItem(params) {
+  ddb.putItem(params, function(err, data) {
+    if (err) {
+      console.log("Error", err);
+    } else {
+      console.log("Success", data);
     }
-  };
-  docClient.get(params, function(err, data) {
+  });
+}
+
+// returns query results when passed params
+function query(params) {
+  var result = docClient.query(params, function(err, data) {
     if (err) {
         console.error("Unable to read item. Error JSON:", JSON.stringify(err, null, 2));
     } else {
         console.log("GetItem succeeded:", JSON.stringify(data, null, 2));
     }
   });
+  return result;
 }
 
-// function the grabs the id of the last run & calls onScan which sets the globalized session ID var
- function incrementRunID() {
-   console.log("Querying the table for the greatest run");
-   // we make a quick array to store all the customer ID s from the past
-   var arrayPastID;
-   var params = {
-     TableName: "dbTest1",
-     ProjectionExpression: "customerID",
-   }; ``
-   docClient.scan(params, onScan);
- }
+//send order to host given guest id 
+function sendOrderToHost(userID) {
+  console.log("sending order to host");
+  pullUser(userID).then((user) => {
+    console.log("sendOrderHost test : " + JSON.stringify(user, null, 2));
+    var host = user["Item"]["hostID"];
+    var order = user["Item"]["orderItems"];
+    // send reciept to the host
+    sendReciept(userID, parseFloat(host), order);
+    // send receipt to guest
+    sendReceipt(userID, userID, order);
+  });
+}
 
-function onScan(err, data) {
-  var scanResults;
-  var previousID;
+function addItem(senderID, item) {
 
-     if (err) {
-      console.error("Unable to scan the table. Error JSON:", JSON.stringify(err, null, 2));
-     }
-     else {
-       // print all the customer IDs
-       console.log("Scan succeeded");
-       console.log("First item is " + data.Items[0].customerID);
-        data.Items.forEach(function(record) {
-          if (record.customerID != null) {
-            //scanResults.push(record.customerID);
-            console.log("record: " + record.customerID);
-            console.log(typeof record.customerID );
+  console.log("adding an item to the users order");
+  var params = {
+    TableName: "run1",
+    Key:{
+        "userID": senderID,
+    },
+    UpdateExpression: "set orderItems = list_append(orderItems, :val)",
+    ExpressionAttributeValues:{
+        ":val": [item],
+    },
+    ReturnValues:"UPDATED_NEW"
+  };
+
+  console.log("Updating the item...");
+  docClient.update(params, function(err, data) {
+      if (err) {
+          console.error("Unable to update item. Error JSON:", JSON.stringify(err, null, 2));
+      } else {
+          console.log("UpdateItem succeeded:", JSON.stringify(data, null, 2));
+      }
+  });
+
+}
+
+//pull user where run status is open
+function pullUser(userID) {
+  var pullUser = new Promise( (resolve, reject) => {
+    var params = {
+      TableName: "run1",
+      Key:{
+        "userID": userID
+      }
+    };
+
+    var user = docClient.get(params, function(err, data) {
+      if (err) {
+          console.error("Unable to read item. Error JSON:", JSON.stringify(err, null, 2));
+          resolve(error);
+      } else {
+          console.log("GetItem succeeded:", JSON.stringify(data, null, 2));
+          resolve(data);
+      }
+    });
+  });
+  return pullUser;
+}
+
+// To be done at the start of each run - combines test functions setHostID and clearItems
+function initializeRun(hostID) {
+
+  var arrayOfAllIDs = getFriendsID(getName(hostID));
+  arrayOfAllIDs.push(hostID);
+
+  for (var i = 0; i < arrayOfAllIDs.length; i++) {
+      var table = "run1";
+      var currentFriend = arrayOfAllIDs[i].toString();
+      console.log("****" + arrayOfAllIDs[i]);
+      // Update the item, unconditionally,
+
+      var params = {
+          TableName: table,
+          Key: {
+              "userID": currentFriend
+          },
+          UpdateExpression: "set hostID = :r, orderItems = :p",
+          ExpressionAttributeValues: {
+              ":r": hostID,
+              ":p": [],
+          },
+          ReturnValues: "UPDATED_NEW"
+      };
+
+      console.log("Updating the item...");
+      docClient.update(params, function(err, data) {
+          if (err) {
+              console.error("Unable to update item. Error JSON:", JSON.stringify(err, null, 2));
+          } else {
+              console.log("UpdateItem succeeded:", JSON.stringify(data, null, 2));
           }
-     });
-     }
-     previousID = data.Items[0].customerID;
-     sessionID = previousID + 1;
-     console.log("****Your current session ID is " + sessionID);
+      });
+  }
 }
 
-//map userID to name
+//given an array of menu items send a receipt
+function sendReciept(senderID, recipientID, items) {
+  var subtotal = calculateTotal(items);
+  var tax = Math.round(subtotal*0.15);
+  tax = Math.round( tax * 100) / 100;
+  var total = subtotal + tax;
+  var elements = [];
+  console.log(items.toString());
+  for (var i = 0; i < items.length; i++) {
+    console.log(items[i]);
+    var item = {
+      title: items[i],
+      quantity: 1,
+      price: getPrice(items[i]),
+      currency: "CAD",
+      image_url: getImage(items[i])
+    }
+    elements.push(item);
+  }
+
+  var payload = {
+    recipient: {
+      id: recipientID
+    }, 
+    message: {
+      attachment: {
+        type: "template",
+        payload: {
+          template_type: "receipt",
+          recipient_name: getName(senderID),
+          sharable: true,
+          currency: "CAD",
+          order_number: "1234",
+          payment_method: "cash or e-transfer",
+          summary: {
+            subtotal: subtotal,
+            total_tax: tax,
+            total_cost: total
+          },
+          elements: elements
+        }
+      }
+    }
+  }
+  
+  callSendAPI(payload);
+}
+
+//map userID to name 1700998199983769
 function getName(userID) {
   var dict = {
     1617178451732981: "Matthieu",
@@ -327,21 +454,50 @@ function getUserID(name) {
 //map name to friend ids 
 function getFriendsID(name) {
   var friends = {
-    "Matthieu": [getUserID("Tyler"), getUserID("Kevin")],
-    "Kevin": [getUserID("Tyler"), getUserID("Matthieu")],
-    "Tyler": [getUserID("Kevin"), getUserID("Matthieu")]
+    "Matthieu": [getUserID("Tyler"), getUserID("Kevin"), getUserID("Eldrick")],
+    "Kevin": [getUserID("Tyler"), getUserID("Matthieu"), getUserID("Eldrick")],
+    "Tyler": [getUserID("Kevin"), getUserID("Matthieu"), getUserID("Eldrick")],
+    "Eldrick": [getUserID("Kevin"), getUserID("Matthieu"), getUserID("Tyler")]
   };
   return friends[name];
 }
 
+//return the price of a menu item 
+function getPrice(name) {
+  var menuItems = {
+    "coffee": 1.79,
+    "donut": 1.00,
+    "sandwich": 5.99
+  };
+  return menuItems[name];
+}
+
+//calculate total
+function calculateTotal(items) {
+  var total = 0.00;
+  for (var i = 0; i < items.length; i++) {
+    total += getPrice(items[i]);
+  }
+  return Math.round(total * 100) / 100;
+}
+
+function getImage(name) {
+  var menuItems = {
+    "coffee": "http://www.timhortons.com/nut-calc-images/CAEN/large/Original-Blend-Coffee.png",
+    "donut": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ2BCaEfmSuVel83xeJ_dSwvtdgEptJHJp6AAtrZWidVTbfKcNTlw",
+    "sandwich": "http://www.timhortons.com/ca/images/ham-cheese-thumbnail.png"
+  };
+  return menuItems[name];
+}
+
 //send quick reply text
-function sendConfirmation(recipientID) {
+function sendConfirmation(recipientID, msg) {
   var messageData = {
     recipient: {
       id: recipientID
     },
     message: {
-      text: "Confirm Order?",
+      text: msg,
       quick_replies: [
         {
           content_type: "text",
@@ -416,9 +572,29 @@ function sendMenu(recipientId) {
   callSendAPI(messageData);
 }
 
-//send button
-function sendButton(recipientId) {
-
+//send join run prompt
+function sendRunPrompt(recipientID, msg) {
+  var messageData = {
+    recipient: {
+      id: recipientID
+    },
+    message: {
+      text: msg,
+      quick_replies: [
+        {
+          content_type: "text",
+          title: "Yes",
+          payload: "join run"
+        },
+        {
+          content_type: "text",
+          title: "No Thanks",
+          payload: "decline run"
+        }
+      ]
+    }
+  };
+  callSendAPI(messageData);
 }
 
 function sendTextMessage(recipientId, messageText) {
@@ -433,6 +609,30 @@ function sendTextMessage(recipientId, messageText) {
   };
   callSendAPI(messageData);
 }
+
+function greetingIntent(recipientID) {
+  var messageData = {
+    recipient: {
+        id: recipientID
+    },
+    message: {
+        text: "Hi, this is Timmy! Do you want me to let your friends know you are going to Tims and get their orders? In the future you can just say 'start a run' and I'll let your friends know you are going to Tims.",
+        quick_replies: [{
+                content_type: "text",
+                title: "Start a run",
+                payload: "startRun"
+            },
+            {
+                content_type: "text",
+                title: "No thanks",
+                payload: "leavingIntent"
+            }
+        ]
+    }
+};
+callSendAPI(messageData);
+}
+
 function callSendAPI(messageData) {
   var body = JSON.stringify(messageData);
   console.log("sending :" + body);
