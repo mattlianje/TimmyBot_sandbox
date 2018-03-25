@@ -8,6 +8,8 @@ AWS.config.update({region: 'us-east-1'});
 var ddb = new AWS.DynamoDB({apiVersion: '2012-10-08'});
 var docClient = new AWS.DynamoDB.DocumentClient();
 var sessionID;
+var globalSenderID;
+var uniqid = require('uniqid');
 
 // TODO write a piece that sets the session ID to the previous session ID +1
 //var nextIDTest = incrementRunID();
@@ -109,6 +111,7 @@ function receivedPostback(event) {
   console.log("Postback data: ", event.postback);
 
   var senderID = event.sender.id;
+  var globalSenderID = event.sender.id;
   var recipientID = event.recipient.id;
   var timeOfMessage = event.timestamp;
   var postback = event.postback;
@@ -169,7 +172,7 @@ function receivedMessage(event) {
         sendTextMessage(1700998199983769, "hi");
         break;
       case 'annoy eldrick':
-        sendTextMessage(1685604204796223, "prepare to face the blickyAHHH");
+        sendTextMessage(1685604204796223, "go to the back of the bus");
         break;
       case "i'm going to tims":
         var host = getName(senderID);
@@ -200,9 +203,16 @@ function receivedMessage(event) {
       case "test increment":
         incrementRunID();
         break;
+      case "test start run":
+        var testSenderID = senderID.toString();
+        createNewRun(testSenderID);
+        //createNewRun(senderID);
+        break;
       default:
         console.log("This is his id: " + recipientID);
-        sendTextMessage(senderID, messageText);
+        var randomID = uniqid();
+        var typeOfID = typeof randomID;
+        sendTextMessage(senderID, messageText + " *** " + randomID + " *** " + typeOfID);
     }
   } else if (messageAttachments) {
     sendTextMessage(senderID, "Message with attachment received");
@@ -228,6 +238,53 @@ function testDb() {
       console.log("Error", err);
     } else {
       console.log("Success", data);
+    }
+  });
+}
+
+function createNewRun(senderID) {
+
+  // When a new run is created we must create a table that has
+
+  /*
+CID      runID    userID   status    items    role
+
+
+
+
+  */
+
+// Before anything we set a unique runID using the slick npm
+
+
+
+// TODO write piece of code that gets the userID s of all the friends
+
+
+
+
+// 
+
+
+  console.log("creating a new run in the db");
+  var table = "dbTest2";
+  var uniqueRunID = uniqid();
+  var params = {
+    TableName: table,
+    Item:{
+      'runID' : { S: uniqueRunID },
+      'hostID' : { N: senderID },
+    }
+  };
+
+  ddb.putItem(params, function(err, data) {
+    if(err) {
+      console.log("Error", err);
+      return false;
+    }
+    else {
+      console.log("**** Success new run created", data);
+      return true;
     }
   });
 }
@@ -268,6 +325,37 @@ function onScan(err, data) {
      console.log("****Your current session ID is " + sessionID);
 }
 
+// function that gets the current run ID for the users that are not hosting but joining the run
+function getRunID() {
+  console.log("Querying the table for the current run id");
+  var arrayPastID;
+   var params = {
+     TableName: "dbTest1",
+     ProjectionExpression: "customerID",
+   };
+   docClient.scan(params, onScanGetCurrent);
+}
+
+function onScanGetCurrent(err, data) {
+  if (err) {
+    console.error("Unable to scan the table. Error JSON:", JSON.stringify(err, null, 2));
+   }
+   else {
+     // print all the customer IDs
+     console.log("Scan succeeded");
+     console.log("First item is " + data.Items[0].customerID);
+      data.Items.forEach(function(record) {
+        if (record.customerID != null) {
+          //scanResults.push(record.customerID);
+          console.log("record: " + record.customerID);
+          console.log(typeof record.customerID );
+        }
+   });
+   }
+   var currentID = data.Items[0].customerID;
+   console.log("****the ID of the current run is " + currentID);
+   sessionID = data.Items[0].customerID;
+}
 //map userID to name
 function getName(userID) {
   var dict = {
@@ -293,9 +381,10 @@ function getUserID(name) {
 //map name to friend ids 
 function getFriendsID(name) {
   var friends = {
-    "Matthieu": [getUserID("Tyler"), getUserID("Kevin")],
-    "Kevin": [getUserID("Tyler"), getUserID("Matthieu")],
-    "Tyler": [getUserID("Kevin"), getUserID("Matthieu")]
+    "Matthieu": [getUserID("Tyler"), getUserID("Kevin"), getUserID("Eldrick")],
+    "Kevin": [getUserID("Tyler"), getUserID("Matthieu"), getUserID("Eldrick")],
+    "Tyler": [getUserID("Kevin"), getUserID("Matthieu"), getUserID("Eldrick")],
+    "Eldrick": [getUserID("Kevin"), getUserID("Tyler"), getUserID("Matthieu")]
   };
   return friends[name];
 }
