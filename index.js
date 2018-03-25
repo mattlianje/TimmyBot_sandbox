@@ -53,18 +53,27 @@ exports.handler = (event, context, callback) => {
         if (data.object === 'page') {
             // Iterate over each entry - there may be multiple if batched
             if (data.entry) {
+            console.log("*****New entry");
                 data.entry.forEach(function(entry) {
                     var pageID = entry.id;
                     var timeOfEvent = entry.time;
                     // Iterate over each messaging event
                     entry.messaging.forEach(function(msg) {
-                        if (msg.message) {
-                            receivedMessage(msg);
-                        } else if (msg.postback) {
-                            receivedPostback(msg);
-                        } else if (msg.quick_reply) {
+                        if (msg.quick_replies) {
+                            console.log("*****enter quick_replies");
                             receivedQuick(msg);
-                        } else {
+                        }
+                        if (msg.message.quick_reply) {
+                            console.log("*****enter quick_reply");
+                            receivedQuick(msg);
+                        }
+                        else if (msg.message) {
+                            receivedMessage(msg);
+                        } 
+                        else if (msg.postback) {
+                            receivedPostback(msg);
+                        }
+                         else {
                             console.log("Webhook received unknown event: ", event);
                         }
                     });
@@ -91,7 +100,7 @@ function receivedQuick(event) {
     var senderID = event.sender.id;
     var recipientID = event.recipient.id;
     var timeOfMessage = event.timestamp;
-    var quick_reply = event.quick_reply;
+    var quick_reply = event.message.quick_reply;
     console.log("Received message for user %d and page %d at %d with message:", senderID, recipientID, timeOfMessage);
     console.log(JSON.stringify(quick_reply));
     var payload = quick_reply.payload;
@@ -104,6 +113,13 @@ function receivedQuick(event) {
             case "confirm":
                 // generate reciept and send host order
                 sendTextMessage(senderID, "Order Confirmed!");
+                break;
+            case "startRun":
+                // TODO Lam
+                sendTextMessage(senderID, "Great! I let your friends know you are going on a run");
+                break;
+            case "leavingIntent":
+                sendTextMessage(senderID, "No problem, I am always here to let your friends know if you are going to Tims :)");
                 break;
             default:
                 sendTextMessage(senderID, "default");
@@ -223,14 +239,22 @@ function receivedMessage(event) {
             case "test increment":
                 incrementRunID();
                 break;
+            case "test send confirmation":
+                sendConfirmation(senderID);
+                break;
+            case "start a run":
+                //TODO Lam
+                // Start a run
+                break;
             case "test start run":
                 var testSenderID = senderID.toString();
                 createNewRun(testSenderID);
                 //createNewRun(senderID);
                 break;
             default:
-                sendTextMessage(senderID, messageText + "***" + senderID);
-
+                //sendTextMessage(senderID, messageText + "***" + senderID);
+                // TODO Lam
+                greetingIntent(senderID);
         }
     } else if (messageAttachments) {
         sendTextMessage(senderID, "Message with attachment received");
@@ -638,6 +662,39 @@ function sendMenu(recipientId) {
     callSendAPI(messageData);
 }
 
+// welcome intent
+
+function welcomeIntent() {
+    console.log("**** Welcoming the user...");
+    var messageData = {
+      get_started: {"payload": "<postback_payload>"}
+    }
+    callSendAPI(messageData);
+}
+
+// TODO Lam
+function greetingIntent(recipientID) {
+  var messageData = {
+    recipient: {
+        id: recipientID
+    },
+    message: {
+        text: "Hi, this is Timmy! Do you want me to let your friends know you are going to Tims and get their orders? In the future you can just say 'start a run' and I'll let your friends know you are going to Tims",
+        quick_replies: [{
+                content_type: "text",
+                title: "Start a run",
+                payload: "startRun"
+            },
+            {
+                content_type: "text",
+                title: "No thanks",
+                payload: "leavingIntent"
+            }
+        ]
+    }
+};
+callSendAPI(messageData);
+}
 //send button
 function sendButton(recipientId) {
 
