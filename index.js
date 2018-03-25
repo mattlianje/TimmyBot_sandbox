@@ -174,6 +174,10 @@ function receivedMessage(event) {
       case 'annoy eldrick':
         sendTextMessage(1685604204796223, "go to the back of the bus");
         break;
+      case "show menu": 
+        console.log("sending menu: ");
+        sendMenu(senderID);
+        break;
       case "i'm going to tims":
         var host = getName(senderID);
         var msg = host + " is going on a tims run, would you like to anything?";
@@ -183,10 +187,6 @@ function receivedMessage(event) {
           console.log("sending to " + getName(friends[i]));
           sendTextMessage(friends[i], msg);
         }
-        break;
-      case "show menu": 
-        console.log("sending menu: ");
-        sendMenu(senderID);
         break;
       case "add another item":
         console.log("adding another item");
@@ -209,10 +209,8 @@ function receivedMessage(event) {
         //createNewRun(senderID);
         break;
       default:
-        console.log("This is his id: " + recipientID);
-        var randomID = uniqid();
-        var typeOfID = typeof randomID;
-        sendTextMessage(senderID, messageText + " *** " + randomID + " *** " + typeOfID);
+        sendTextMessage(senderID, messageText + "***" + senderID);
+
     }
   } else if (messageAttachments) {
     sendTextMessage(senderID, "Message with attachment received");
@@ -255,38 +253,68 @@ CID      runID    userID   status    items    role
   */
 
 // Before anything we set a unique runID using the slick npm
+console.log("creating a new run in the db...");
 
-
-
-// TODO write piece of code that gets the userID s of all the friends
-
-
-
-
-// 
-
-
-  console.log("creating a new run in the db");
-  var table = "dbTest2";
-  var uniqueRunID = uniqid();
+var uniqueRunID = uniqid();
+var table = "runs2";
+var hostCID = uniqueRunID + "-" + senderID;
+// TODO add the host of the run to the run table
   var params = {
     TableName: table,
     Item:{
-      'runID' : { S: uniqueRunID },
-      'hostID' : { N: senderID },
+      'CID' : hostCID,
+      'runID' : uniqueRunID,
+      'userID' : senderID,
+      'runStatus' : "open",
+      'items' : "NA",
+      'role' : "host",
     }
   };
-
-  ddb.putItem(params, function(err, data) {
+  docClient.put(params, function(err, data) {
     if(err) {
       console.log("Error", err);
       return false;
     }
     else {
-      console.log("**** Success new run created", data);
+      //console.log("**** Success new run created", data);
       return true;
     }
   });
+
+// TODO write piece of code that gets the userID s of all the friends
+var senderName = getName(senderID);
+var arrayOfFriends = getFriendsID(senderName);
+var length = arrayOfFriends.length;
+
+// loop through and add all the guest of the run to the table
+for (var i = 0; i < length; i++) {
+  var table = "runs2";
+  var currentFriendID = arrayOfFriends[i];
+  var CID = uniqueRunID + "-" + currentFriendID;
+  // TODO add the host of the run to the run table
+    var params = {
+      TableName: table,
+      Item:{
+        'CID' : CID,
+        'runID' : uniqueRunID,
+        'userID' : currentFriendID,
+        'runStatus' : "open",
+        'items' : "no selections yet",
+        'role' : "guest",
+      }
+    };
+    docClient.put(params, function(err, data) {
+      if(err) {
+        console.log("Error", err);
+        return false;
+      }
+      else {
+        console.log("**** Success new run created", data);
+        return true;
+      }
+    });
+}
+
 }
 
 // function the grabs the id of the last run & calls onScan which sets the globalized session ID var
@@ -362,7 +390,8 @@ function getName(userID) {
     1617178451732981: "Matthieu",
     1671101976301343: "Kevin",
     1700998199983769: "Tyler",
-    1685604204796223: "Eldrick"
+    1685604204796223: "Eldrick",
+    1547553705291892: "Matthieu2"
   };
   return dict[userID];
 }
@@ -373,7 +402,8 @@ function getUserID(name) {
     "Tyler": 1700998199983769,
     "Matthieu": 1617178451732981,
     "Kevin": 1671101976301343,
-    "Eldrick": 1685604204796223
+    "Eldrick": 1685604204796223,
+    "Matthieu2" : 1547553705291892
   };
   return dict[name];
 }
@@ -384,7 +414,8 @@ function getFriendsID(name) {
     "Matthieu": [getUserID("Tyler"), getUserID("Kevin"), getUserID("Eldrick")],
     "Kevin": [getUserID("Tyler"), getUserID("Matthieu"), getUserID("Eldrick")],
     "Tyler": [getUserID("Kevin"), getUserID("Matthieu"), getUserID("Eldrick")],
-    "Eldrick": [getUserID("Kevin"), getUserID("Tyler"), getUserID("Matthieu")]
+    "Eldrick": [getUserID("Kevin"), getUserID("Tyler"), getUserID("Matthieu")],
+    "Matthieu2" : [getUserID("Kevin"), getUserID("Tyler"), getUserID("Matthieu")]
   };
   return friends[name];
 }
