@@ -6,6 +6,8 @@ var PAGE_ACCESS_TOKEN = "EAAC30NL4C5cBAGgHCjWafH6ZC7gZBlHBZCPo5RyEF0zQ6HE7T6agUG
 var AWS = require('aws-sdk');
 AWS.config.update({region: 'us-west-2'});
 var ddb = new AWS.DynamoDB({apiVersion: '2012-10-08'});
+var docClient = new AWS.DynamoDB.DocumentClient();
+var sessionID;
 
 exports.handler = (event, context, callback) => {
     
@@ -162,6 +164,9 @@ function receivedMessage(event) {
       case 'annoy tyler': 
         sendTextMessage(1700998199983769, "hi");
         break;
+      case 'annoy eldrick':
+        sendTextMessage(1685604204796223, "prepare to face the blickyAHHH");
+        break;
       case "i'm going to tims":
         var host = getName(senderID);
         var msg = host + " is going on a tims run, would you like to anything?";
@@ -188,6 +193,9 @@ function receivedMessage(event) {
       case "test db":
         testDb();
         break;
+      case "test increment":
+        incrementRunID();
+        break;
       default:
         console.log("This is his id: " + recipientID);
         sendTextMessage(senderID, messageText);
@@ -200,13 +208,13 @@ function receivedMessage(event) {
 function testDb() {
   console.log("testing DB");
   var table = "dbTest1";
-  var customerID = 2008;
+  var customerID = 2000;
     //var title = "The Big New Movie";
     
   var params = {
       TableName: table,
       Item:{
-          'customerID': { N: "2000" },
+          'customerID': { N: "2022" },
           'Info' : { S: 'fagit' },
       }
   };
@@ -218,6 +226,80 @@ function testDb() {
       console.log("Success", data);
     }
   });
+
+  getThing(2022, 'fagit');
+
+  params = {
+    TableName: table,
+    Item:{
+        'customerID': { N: "2022" },
+        'Info' : { S: 'not fagit' },
+    }
+  };
+
+  ddb.putItem(params, function(err, data) {
+    if (err) {
+      console.log("Error", err);
+    } else {
+      console.log("Success", data);
+    }
+  });
+  
+  getThing(2022, 'not fagit');
+}
+
+//test retrieval 
+function getThing(id, info) {
+  console.log("get thing");
+  var params = {
+    TableName: "dbTest1",
+    Key: {
+      'customerID': id
+    }
+  };
+  docClient.get(params, function(err, data) {
+    if (err) {
+        console.error("Unable to read item. Error JSON:", JSON.stringify(err, null, 2));
+    } else {
+        console.log("GetItem succeeded:", JSON.stringify(data, null, 2));
+    }
+  });
+}
+
+// function the grabs the id of the last run & calls onScan which sets the globalized session ID var
+ function incrementRunID() {
+   console.log("Querying the table for the greatest run");
+   // we make a quick array to store all the customer ID s from the past
+   var arrayPastID;
+   var params = {
+     TableName: "dbTest1",
+     ProjectionExpression: "customerID",
+   }; ``
+   docClient.scan(params, onScan);
+ }
+
+function onScan(err, data) {
+  var scanResults;
+  var previousID;
+
+     if (err) {
+      console.error("Unable to scan the table. Error JSON:", JSON.stringify(err, null, 2));
+     }
+     else {
+       // print all the customer IDs
+       console.log("Scan succeeded");
+       console.log("First item is " + data.Items[0].customerID);
+        data.Items.forEach(function(record) {
+          if (record.customerID != null) {
+            //scanResults.push(record.customerID);
+            console.log("record: " + record.customerID);
+            console.log(typeof record.customerID );
+          }
+     });
+     }
+     previousID = data.Items[0].customerID;
+     sessionID = previousID + 1;
+     console.log("****Your current session ID is " + sessionID);
 }
 
 //map userID to name
@@ -225,7 +307,8 @@ function getName(userID) {
   var dict = {
     1617178451732981: "Matthieu",
     1671101976301343: "Kevin",
-    1700998199983769: "Tyler"
+    1700998199983769: "Tyler",
+    1685604204796223: "Eldrick"
   };
   return dict[userID];
 }
@@ -235,7 +318,8 @@ function getUserID(name) {
   var dict = {
     "Tyler": 1700998199983769,
     "Matthieu": 1617178451732981,
-    "Kevin": 1671101976301343
+    "Kevin": 1671101976301343,
+    "Eldrick": 1685604204796223
   };
   return dict[name];
 }
@@ -309,6 +393,18 @@ function sendMenu(recipientId) {
                   title: "Add Item",
                   type: "postback",
                   payload: "donut"
+                }
+              ]
+            },
+            {
+              title: "Sandwich $5.99",
+              subtitle: "Fresh BLT on Italian bun",
+              image_url: "http://www.timhortons.com/ca/images/ham-cheese-thumbnail.png",
+              buttons: [
+                {
+                  title: "Add Item",
+                  type: "postback",
+                  payload: "sandwich"
                 }
               ]
             }
