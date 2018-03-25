@@ -174,6 +174,17 @@ function receivedMessage(event) {
       case 'annoy eldrick':
         sendTextMessage(1685604204796223, "go to the back of the bus");
         break;
+      case 'test clear items':
+        //var host = getName(senderID);
+        //var friends = getFriendsID(host);
+        var friends = getAllID();
+        clearItems(friends);
+        break;
+      case 'test set host':
+        var friends = getAllID();
+        var host = senderID;
+        setHostID(host, friends);
+        break;
       case "show menu": 
         console.log("sending menu: ");
         sendMenu(senderID);
@@ -317,6 +328,70 @@ for (var i = 0; i < length; i++) {
 
 }
 
+function clearItems(arrayOfAllID) {
+
+  // For each ID in the array of friends do
+  for (var i = 0; i<arrayOfFriends.length; i++) {
+    var table = "run1";
+    var currentFriend = arrayOfFriends[i];
+    console.log("****" + arrayOfFriends[i]);
+
+    // Update the item, unconditionally,
+
+    var params = {
+        TableName:table,
+        Key:{
+            "userID": currentFriend
+        },
+        UpdateExpression: "set orderItem = :r",
+        ExpressionAttributeValues:{
+            ":r": [],
+        },
+        ReturnValues:"UPDATED_NEW"
+    };
+
+    console.log("Updating the item...");
+    docClient.update(params, function(err, data) {
+        if (err) {
+            console.error("Unable to update item. Error JSON:", JSON.stringify(err, null, 2));
+        } else {
+            console.log("UpdateItem succeeded:", JSON.stringify(data, null, 2));
+        }
+    });
+
+  }
+}
+
+function setHostID(hostID, arrayOfAllIDs) {
+  for (var i = 0; i<arrayOfAllIDs.length; i++) {
+    var table = "run1";
+    var currentFriend = arrayOfAllIDs[i];
+    console.log("****" + arrayOfAllIDs[i]);
+  // Update the item, unconditionally,
+
+  var params = {
+      TableName:table,
+      Key:{
+          "userID": currentFriend
+      },
+      UpdateExpression: "set hostID = :r",
+      ExpressionAttributeValues:{
+          ":r": hostID,
+      },
+      ReturnValues:"UPDATED_NEW"
+  };
+
+  console.log("Updating the item...");
+  docClient.update(params, function(err, data) {
+      if (err) {
+          console.error("Unable to update item. Error JSON:", JSON.stringify(err, null, 2));
+      } else {
+          console.log("UpdateItem succeeded:", JSON.stringify(data, null, 2));
+      }
+  });
+ }
+}
+
 // function the grabs the id of the last run & calls onScan which sets the globalized session ID var
  function incrementRunID() {
    console.log("Querying the table for the greatest run");
@@ -350,7 +425,27 @@ function onScan(err, data) {
      }
      previousID = data.Items[0].customerID;
      sessionID = previousID + 1;
+     //return sessionID;
      console.log("****Your current session ID is " + sessionID);
+
+     var table = "dbTest1";
+  
+      var params = {
+          TableName: table,
+          Item:{
+              'customerID': sessionID,
+              'Info' : "faggy",
+          }
+      };
+
+        docClient.put(params, function(err, data) {
+          if (err) {
+            console.log("Error", err);
+          } else {
+            console.log("Success", data);
+          }
+      });
+  
 }
 
 // function that gets the current run ID for the users that are not hosting but joining the run
@@ -415,9 +510,14 @@ function getFriendsID(name) {
     "Kevin": [getUserID("Tyler"), getUserID("Matthieu"), getUserID("Eldrick")],
     "Tyler": [getUserID("Kevin"), getUserID("Matthieu"), getUserID("Eldrick")],
     "Eldrick": [getUserID("Kevin"), getUserID("Tyler"), getUserID("Matthieu")],
-    "Matthieu2" : [getUserID("Kevin"), getUserID("Tyler"), getUserID("Matthieu")]
+    "Matthieu2" : [getUserID("Kevin"), getUserID("Tyler"), getUserID("Eldrick")]
   };
   return friends[name];
+}
+
+function getAllID() {
+  var allNigs = [getUserID("Tyler"), getUserID("Kevin"), getUserID("Eldrick"), getUserID("Matthieu2")];
+  return allNigs;
 }
 
 //send quick reply text
