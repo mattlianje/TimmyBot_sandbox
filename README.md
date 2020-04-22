@@ -1,0 +1,7 @@
+# timmy-runner
+
+[Social Chatbot] ... 🇨🇦☕ Payment handling chabtot connecting groups of friends who want to send someone to pickup a Tim's order
+
+<p align="center">
+  <img src="data/timmy_runner.PNG" width="350">
+</p>
